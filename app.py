@@ -1,8 +1,10 @@
 from flask import Flask, render_template, jsonify, request
 import psycopg2
 from db import get_db_connection
+import os
 
 app = Flask(__name__)
+app.secret_key = os.getenv("$1f7a!K9p@3xZq#rL8vW0t&nB4jH2dQ")
 
 # ---------------- States ----------------
 @app.route('/get_states')
@@ -80,3 +82,4 @@ def home():
 
 if __name__ == '__main__':
     app.run(debug=True)
+
