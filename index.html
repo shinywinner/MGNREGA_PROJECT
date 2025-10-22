@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>MGNREGA District Performance</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Bootstrap CSS for styling -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            padding: 20px;
+            background-color: #f8f9fa;
+        }
+        .info-card {
+            padding: 15px;
+            border-radius: 10px;
+            color: white;
+            text-align: center;
+        }
+        .jobcards { background-color: #007bff; }
+        .workers { background-color: #28a745; }
+        #controls { margin-bottom: 20px; }
+    </style>
+</head>
+<body>
+    <h2 class="mb-4">MGNREGA District Performance</h2>
+
+    <div id="controls" class="mb-4">
+        <label for="stateSelect" class="form-label">Select State:</label>
+        <select id="stateSelect" class="form-select mb-2"></select>
+
+        <label for="districtSelect" class="form-label">Select District:</label>
+        <select id="districtSelect" class="form-select mb-2"></select>
+
+        <button class="btn btn-primary mt-2" onclick="loadSelectedDistrict()">Show Data</button>
+    </div>
+
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="info-card jobcards">
+                <h5>Total Jobcards Issued</h5>
+                <h3 id="jobcardsCount">0</h3>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="info-card workers">
+                <h5>Total Workers</h5>
+                <h3 id="workersCount">0</h3>
+            </div>
+        </div>
+    </div>
+
+    <canvas id="myChart" width="800" height="400"></canvas>
+
+    <script>
+    let states = [];
+    let districts = [];
+    let chart = null;
+
+    // Fetch states and populate dropdown
+    fetch('/get_states')
+        .then(res => res.json())
+        .then(data => {
+            states = data;
+            const stateSelect = document.getElementById('stateSelect');
+            states.forEach(state => {
+                const option = document.createElement('option');
+                option.value = state.id;
+                option.text = state.name;
+                stateSelect.add(option);
+            });
+            loadDistricts(states[0].id);
+        });
+
+    function loadDistricts(state_id){
+        fetch(`/get_districts?state_id=${state_id}`)
+            .then(res => res.json())
+            .then(data => {
+                districts = data;
+                const districtSelect = document.getElementById('districtSelect');
+                districtSelect.innerHTML = '';
+                districts.forEach(d => {
+                    const option = document.createElement('option');
+                    option.value = d.id;
+                    option.text = d.name;
+                    districtSelect.add(option);
+                });
+            });
+    }
+
+    document.getElementById('stateSelect').addEventListener('change', function(){
+        loadDistricts(this.value);
+    });
+
+    function loadSelectedDistrict(){
+        const district_id = document.getElementById('districtSelect').value;
+        const district_name = document.getElementById('districtSelect').selectedOptions[0].text;
+        document.querySelector('h2').innerText = "MGNREGA Data: " + district_name;
+        loadGraph(district_id);
+    }
+
+    function loadGraph(district_id){
+        fetch(`/metrics?district_id=${district_id}`)
+        .then(res => res.json())
+        .then(data => {
+            const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                                "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+            const datasets = [];
+            let latestJobcards = 0;
+            let latestWorkers = 0;
+
+            Object.keys(data).forEach(label => {
+                const values = Array(12).fill(0);
+                data[label].forEach(item => {
+                    const monthIndex = parseInt(item.month) - 1;
+                    values[monthIndex] = item.value;
+
+                    // Latest month value for info cards
+                    if(label === "Total Jobcards Issued" && item.month == Math.max(...data[label].map(x=>parseInt(x.month)))) {
+                        latestJobcards = item.value;
+                    }
+                    if(label === "Total Workers" && item.month == Math.max(...data[label].map(x=>parseInt(x.month)))) {
+                        latestWorkers = item.value;
+                    }
+                });
+
+                const color = label === "Total Jobcards Issued" ? "#007bff" : "#28a745";
+                datasets.push({
+                    label: label,
+                    data: values,
+                    borderColor: color,
+                    backgroundColor: color,
+                    fill: false,
+                    tension: 0.1
+                });
+            });
+
+            document.getElementById('jobcardsCount').innerText = latestJobcards;
+            document.getElementById('workersCount').innerText = latestWorkers;
+
+            const ctx = document.getElementById('myChart').getContext('2d');
+            if(chart !== null){
+                chart.destroy();
+            }
+            chart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: monthNames,
+                    datasets: datasets
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: { position: 'top' },
+                        title: { display: true, text: 'MGNREGA Performance' },
+                        tooltip: { enabled: true }
+                    },
+                    scales: { y: { beginAtZero: true } }
+                }
+            });
+        });
+    }
+    </script>
+</body>
+</html>
